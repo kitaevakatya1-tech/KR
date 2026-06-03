@@ -1,0 +1,245 @@
+library(rmarkdown)
+
+css_styles <- "
+<style>
+  /* Фон и базовый текст */
+  body { 
+    color: #8B0000; 
+    background-color: #FFE4E1; 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  
+  /* Заголовки */
+  h1 { 
+    color: #8B0000; 
+    border-bottom: 3px solid #8B0000; 
+    padding-bottom: 8px;
+    margin-top: 30px;
+  }
+  h2 { 
+    color: #B22222; 
+    border-bottom: 2px solid #CD5C5C; 
+    padding-bottom: 5px;
+    margin-top: 25px;
+  }
+  h3 { 
+    color: #8B0000; 
+    font-weight: 600;
+    margin-top: 20px;
+  }
+  h4 { 
+    color: #B22222; 
+    font-style: italic;
+  }
+  
+  /* Ссылки */
+  a { color: #B22222; }
+  a:hover { color: #8B0000; }
+  
+  /* Код и блоки */
+  code { 
+    background-color: #FFE4E1; 
+    color: #8B0000; 
+    border: 1px solid #CD5C5C;
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+  pre { 
+    border-left: 4px solid #8B0000; 
+    background-color: #FFE4E1; 
+    border-radius: 0 4px 4px 0;
+  }
+  .sourceCode { 
+    border: 1px solid #CD5C5C; 
+    background-color: #FFE4E1;
+    border-radius: 4px;
+  }
+  
+  /* Таблицы */
+  table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    background-color: #FFE4E1;
+  }
+  th { 
+    background-color: #8B0000; 
+    color: #FFE4E1; 
+    padding: 10px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td { 
+    border-bottom: 1px solid #CD5C5C; 
+    padding: 8px 10px;
+    color: #8B0000;
+  }
+  tr:hover { 
+    background-color: #FFF0F0; 
+  }
+  
+</style>
+"
+rmd_lines <- c(
+  '---',
+  'title: "Отчёт: Анализ пользовательских предпочтений (NMF)"',
+  'output:',
+  '  html_document:',
+  '    theme: flatly',
+  '    toc: true',
+  '    toc_depth: 3',
+  '    highlight: tango',
+  '---',
+  '',
+  css_styles,
+  '',
+  '## 1. Исходные данные',
+  '### Таблица ratings (превью)',
+  '```{r head-ratings}',
+  'if (exists("ratings")) {',
+  '  ratings %>% select(userId, movieId, rating) %>% head() %>% knitr::kable()',
+  '} else {',
+  '  cat("Таблица ratings не найдена\\n")',
+  '}',
+  '```',
+  '',
+  '### Таблица movies (превью)',
+  '```{r head-movies}',
+  'if (exists("movies")) {',
+  '  movies %>% select(movieId, title, genres) %>% head() %>% knitr::kable()',
+  '} else {',
+  '  cat("Таблица movies не найдена\\n")',
+  '}',
+  '```',
+  '',
+  '## 2. Основные метрики данных',
+  '```{r basic-metrics, fig.width=7, fig.height=4}',
+  'library(ggplot2)',
+  '',
+  '# Числовые метрики',
+  'if (exists("ratings")) {',
+  '  cat("• Средняя оценка:", round(mean(ratings$rating), 3), "\\n")',
+  '  cat("• Медиана:", median(ratings$rating), "\\n")',
+  '  cat("• Стандартное отклонение:", round(sd(ratings$rating), 3), "\\n")',
+  '  cat("• Мин/Макс:", min(ratings$rating), "/", max(ratings$rating), "\\n")',
+  '  cat("• Всего оценок:", nrow(ratings), "\\n")',
+  '  cat("• Уникальных пользователей:", length(unique(ratings$userId)), "\\n")',
+  '  cat("• Уникальных фильмов:", length(unique(ratings$movieId)), "\\n\\n")',
+  '  ',
+  '  # Гистограмма распределения',
+  '  ggplot(ratings, aes(x = rating)) +',
+  '    geom_histogram(binwidth = 0.5, color = "#FFE4E1", fill = "#8B0000", alpha = 0.9) +',
+  '    scale_fill_gradient(low = "#CD5C5C", high = "#8B0000") +',
+  '    labs(title = "Распределение пользовательских оценок",',
+  '         x = "Оценка", y = "Количество") +',
+  '    theme_minimal() +',
+  '    theme(legend.position = "none")',
+  '} else {',
+  '  cat("Данные для анализа не загружены\\n")',
+  '}',
+  '```',
+  '',
+  '## 3. Результаты матричного разложения (NMF)',
+  '```{r nmf-results}',
+  'if (exists("W") && exists("H")) {',
+  '  cat("Матрица W (пользователи × латентные факторы):\\n")',
+  '  cat("   Размерность:", paste(dim(W), collapse = " × "), "\\n")',
+  '  cat("   Диапазон весов: [", round(min(W), 4), "; ", round(max(W), 4), "]\\n\\n", sep="")',
+  '  ',
+  '  cat("Матрица H (латентные факторы × фильмы):\\n")',
+  '  cat("   Размерность:", paste(dim(H), collapse = " × "), "\\n")',
+  '  cat("   Диапазон нагрузок: [", round(min(H), 4), "; ", round(max(H), 4), "]\\n", sep="")',
+  '} else {',
+  '  cat("Матрицы W и H не найдены. Выполните код NMF перед компиляцией отчёта.\\n")',
+  '}',
+  '```',
+  '',
+  '## 4. Топ самых оцениваемых жанров',
+  '```{r top-genres-count, fig.width=8, fig.height=5}',
+  'if (exists("ratings") && exists("movies")) {',
+  '  # Подсчёт количества оценок по жанрам',
+  '  genre_counts <- ratings %>%',
+  '    left_join(movies %>% select(movieId, genres), by = "movieId") %>%',
+  '    filter(!is.na(genres)) %>%',
+  '    separate_rows(genres, sep = "\\\\|") %>%',
+  '    count(genres, sort = TRUE) %>%',
+  '    head(10) %>%',
+  '    rename(Genre = genres, Count = n)',
+  '  ',
+  '  # Визуализация',
+  '  ggplot(genre_counts, aes(x = reorder(Genre, Count), y = Count)) +',
+  '    geom_bar(stat = "identity", fill = "#CD5C5C", alpha = 0.8) +',
+  '    coord_flip() +',
+  '    labs(',
+  '      title = "Топ-10 самых оцениваемых жанров",',
+  '      x = "Жанр",',
+  '      y = "Количество оценок"',
+  '    ) +',
+  '    theme_minimal() +',
+  '    theme(',
+  '      plot.title = element_text(color = "#8B0000", face = "bold"),',
+  '      plot.subtitle = element_text(color = "#A52A2A")',
+  '    )',
+  '} else {',
+  '  cat("Необходимые данные не загружены\\n")',
+  '}',
+  '```',
+  '',
+  '## 5. Интерпретация латентных факторов через жанры',
+  '```{r factor-genres, fig.width=9, fig.height=6}',
+  'if (exists("H") && exists("movies")) {',
+  '  # 1. Создаём таблицу: фильмы × их нагрузка на факторы',
+  '  H_df <- as.data.frame(t(H)) %>%',
+  '    mutate(MovieID = as.numeric(colnames(H)))',
+  '  ',
+  '  # 2. Присоединяем жанры',
+  '  H_genres <- H_df %>%',
+  '    left_join(movies %>% select(movieId, genres), by = c("MovieID" = "movieId")) %>%',
+  '    filter(!is.na(genres)) %>%',
+  '    separate_rows(genres, sep = "\\\\|")',
+  '  ',
+  '  # 3. Считаем среднюю нагрузку каждого жанра на каждый фактор',
+  '  factor_genre_load <- H_genres %>%',
+  '    pivot_longer(cols = -c(MovieID, genres), names_to = "Factor", values_to = "Load") %>%',
+  '    group_by(genres, Factor) %>%',
+  '    summarise(mean_load = mean(Load, na.rm = TRUE), .groups = "drop") %>%',
+  '    filter(!is.na(genres), mean_load > 0)',
+  '  ',
+  '  # 4. Визуализация: тепловая карта "Фактор × Жанр"',
+  '  ggplot(factor_genre_load, aes(x = Factor, y = reorder(genres, mean_load), fill = mean_load)) +',
+  '    geom_tile() +',
+  '    scale_fill_gradient(low = "#FFF0F0", high = "#8B0000", name = "Нагрузка") +',
+  '    labs(',
+  '      title = "Интерпретация латентных факторов через жанры",',
+  '      x = "Латентный фактор",',
+  '      y = "Жанр"',
+  '    ) +',
+  '    theme_minimal() +',
+  '    theme(',
+  '      plot.title = element_text(color = "#8B0000", face = "bold"),',
+  '      plot.subtitle = element_text(color = "#A52A2A"),',
+  '      axis.text.y = element_text(size = 8)',
+  '    )',
+  '} else {',
+  '  cat("Матрица H или таблица movies не найдены\\n")',
+  '}',
+  '```',
+  '',
+  '## 6. Выводы',
+  '1. **Данные**: Датасет содержит `r if(exists("ratings")) nrow(ratings) else "N/A"` оценок от `r if(exists("ratings")) length(unique(ratings$userId)) else "N/A"` пользователей для `r if(exists("ratings")) length(unique(ratings$movieId)) else "N/A"` фильмов.',
+  '',
+  '2. **NMF**: Метод успешно снизил размерность данных, выделив латентные факторы предпочтений. Матрицы W и H позволяют интерпретировать скрытые паттерны через жанровую принадлежность фильмов.',
+  '',
+  '3. **Автоматизация**: Данный отчёт сгенерирован автоматически через RMarkdown. Все графики, таблицы и метрики обновляются при повторном запуске, что обеспечивает воспроизводимость исследования.',
+  '',
+  '---',
+  '*Отчёт сформирован: `r Sys.time()`*'
+)
+
+# Сохраняем .Rmd файл
+writeLines(rmd_lines, "/content/final_report.Rmd")
+
+# Компилируем в HTML
+render("/content/final_report.Rmd",
+       output_format = "html_document",
+       output_dir = "/content",
+       envir = globalenv())
